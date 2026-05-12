@@ -268,39 +268,43 @@ def get_user_recommendations(user_id, top_n=5):
     if len(DF) == 0:
         prepare_data()
     
-    # Создаём матрицу пользователь-товар
-    user_product = DF.pivot_table(index='user_id', columns='product', values='rating', aggfunc='mean')
+    print(f"[Recommendations] User ID: {user_id}")
     
-    if user_id not in user_product.index:
-        # Новый пользователь - рекомендуем популярные
-        popular = DF.groupby('product')['rating'].mean().sort_values(ascending=False)
-        return list(popular.head(top_n).index)
+    # Проверяем отзывы пользователя в БД
+    user_reviews_df = get_user_reviews(user_id)
+    print(f"[Recommendations] Found {len(user_reviews_df)} user reviews in DB")
     
-    # Похожие пользователи (cosine similarity)
-    user_ratings = user_product.loc[user_id].fillna(0).values.reshape(1, -1)
-    similarities = []
+    if len(user_reviews_df) > 0:
+        print(f"[Recommendations] User products: {list(user_reviews_df['product'].unique())[:5]}")
+        
+        user_rated_products = set(user_reviews_df['product'].unique())
+        user_high_rated = user_reviews_df[user_reviews_df['rating'] >= 4]
+        
+        if len(user_high_rated) > 0:
+            # Получаем топ вина из основной базы (которых пользователь не оценивал)
+            top_wines = DF[~DF['product'].isin(user_rated_products)]
+            
+            # Группируем и сортируем по рейтингу
+            top_wines_grouped = top_wines.groupby('product').agg({
+                'rating': 'mean',
+                'sentiment': 'mean'
+            }).reset_index()
+            
+            top_wines_grouped = top_wines_grouped.sort_values(['rating', 'sentiment'], ascending=[False, False])
+            
+            # Возвращаем топ вина с хорошими оценками
+            top_products = top_wines_grouped[top_wines_grouped['rating'] >= 4]['product'].head(top_n).tolist()
+            print(f"[Recommendations] Returning: {top_products}")
+            
+            if len(top_products) >= top_n:
+                return top_products
     
-    for uid in user_product.index:
-        if uid != user_id:
-            other_ratings = user_product.loc[uid].fillna(0).values.reshape(1, -1)
-            sim = cosine_similarity(user_ratings, other_ratings)[0][0]
-            similarities.append((uid, sim))
-    
-    similarities.sort(key=lambda x: x[1], reverse=True)
-    similar_users = [s[0] for s in similarities[:10]]
-    
-    # Рекомендуем то, что понравилось похожим пользователям
-    user_rated = set(DF[DF['user_id'] == user_id]['product'].unique())
-    recommendations = []
-    
-    for sim_user in similar_users:
-        sim_user_rated = DF[DF['user_id'] == sim_user]
-        top_rated = sim_user_rated[sim_user_rated['rating'] >= 4]['product'].unique()
-        for prod in top_rated:
-            if prod not in user_rated:
-                recommendations.append(prod)
-    
-    return list(set(recommendations))[:top_n]
+    # Новый пользователь или нет похожих - популярные вина
+    popular = DF.groupby('product').agg({'rating': 'mean', 'sentiment': 'mean'}).reset_index()
+    popular = popular.sort_values(['rating', 'sentiment'], ascending=[False, False])
+    result = list(popular.head(top_n)['product'])
+    print(f"[Recommendations] Returning popular: {result[:3]}")
+    return result
 
 
 # ==================== ЗАЩИТА ПЕРСОНАЛЬНЫХ ДАННЫХ ====================
@@ -360,9 +364,15 @@ def save_review(user_id, product, text, rating, sentiment):
 def get_user_reviews(user_id):
     """Получение отзывов пользователя"""
     conn = sqlite3.connect(DB_FILE)
-    df = pd.read_sql_query(f"SELECT * FROM reviews WHERE user_id = '{user_id}' ORDER BY date DESC", conn)
+    c = conn.cursor()
+    c.execute("SELECT * FROM reviews WHERE user_id = ? ORDER BY date DESC", (str(user_id),))
+    rows = c.fetchall()
     conn.close()
-    return df
+    
+    if not rows:
+        return pd.DataFrame()
+    
+    return pd.DataFrame(rows, columns=['id', 'user_id', 'product', 'text', 'rating', 'sentiment', 'date'])
 
 
 # ==================== РЕНДЕРИНГ HTML ====================
@@ -370,15 +380,23 @@ def render_result_card(i, r):
     """Рендеринг карточки вина"""
     rating_stars = '★' * r.get('rating', 3) + '☆' * (5 - r.get('rating', 3))
     country = r.get('country', 'Unknown')
+    price = r.get('price', 0)
+    price_str = f"${price:.2f}" if price > 0 else "N/A"
+    description = r.get('description', '')[:60] + '...' if r.get('description') else ''
+    region = r.get('region', '')
+    
     return f'''
     <div class="wine-card">
         <div class="wine-header">
             <span class="wine-number">#{i}</span>
             <span class="wine-rating">{rating_stars}</span>
         </div>
+        <div class="wine-icon"></div>
         <div class="wine-name">{r.get('name', 'Unknown')}</div>
-        <div class="wine-info">{r.get('product', 'Unknown')} | {country}</div>
-        <div class="wine-price">${r.get('price', 0):.2f}</div>
+        <div class="wine-info">{r.get('product', 'Unknown')}</div>
+        <div class="wine-country">{country}{" | " + region if region else ""}</div>
+        <div class="wine-price">{price_str}</div>
+        <div class="wine-description">{description}</div>
         <span class="match-score">Совм: {r.get('score', 0):.0f}%</span>
     </div>
     '''
@@ -465,7 +483,9 @@ def recommend_wines(query, top_k=5):
             'country': row.get('country', 'Unknown'),
             'price': row.get('price', 0) if pd.notna(row.get('price')) else 0,
             'rating': row['rating'],
-            'score': score
+            'score': score,
+            'description': row.get('text', '')[:100],
+            'region': row.get('region', '')
         }
         for row, score in scores[:top_k]
     ]

@@ -181,8 +181,10 @@
             -webkit-box-orient: vertical;
             overflow: hidden;
         }
-        .wine-info { font-size: 11px; color: var(--text-muted); margin-bottom: 6px; }
-        .wine-price { font-size: 14px; font-weight: 600; color: var(--primary); }
+        .wine-info { font-size: 11px; color: var(--text-muted); margin-bottom: 4px; }
+        .wine-country { font-size: 10px; color: var(--accent); margin-bottom: 6px; }
+        .wine-price { font-size: 14px; font-weight: 600; color: var(--primary); margin-bottom: 4px; }
+        .wine-description { font-size: 10px; color: var(--text-muted); height: 28px; overflow: hidden; margin-bottom: 6px; }
         .match-score { 
             font-size: 11px; 
             color: var(--text-muted); 
@@ -322,6 +324,13 @@
             color: var(--text-muted); 
         }
         
+        .recommendations-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 15px;
+        }
+        
         /* === SENSITIVE DATA === */
         .privacy-note {
             font-size: 11px;
@@ -337,7 +346,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🍷 Wine Recommendation System</h1>
+            <h1>Wine Recommendation System</h1>
             <p>Review analysis, forecasting & personalized recommendations</p>
         </div>
         
@@ -365,7 +374,7 @@
             <!-- РЕЗУЛЬТАТЫ ПОИСКА -->
             <div id="search" class="tab-content active">
                 <div class="instructions">
-                    <h3>💡 How to search:</h3>
+                    <h3>How to search:</h3>
                     <ul>
                         <li><strong>By type:</strong> "red", "white", "rosé", "sparkling"</li>
                         <li><strong>By country:</strong> "France", "Italy", "Spain", "Argentina"</li>
@@ -394,7 +403,7 @@
             
             <!-- СТАТИСТИКА -->
             <div id="stats" class="tab-content">
-                <h2>📊 Wine Statistics</h2>
+                <h2>Wine Statistics</h2>
                 
                 <h3 style="margin-top: 20px;">Top Wines by Positive Reviews</h3>
                 {{top_positive}}
@@ -402,13 +411,13 @@
                 <h3 style="margin-top: 25px;">Detailed Statistics</h3>
                 {{stats_html}}
                 
-                <h3 style="margin-top: 25px;">📈 Review Forecast</h3>
+                <h3 style="margin-top: 25px;">Review Forecast</h3>
                 {{forecast}}
             </div>
             
             <!-- РЕКОМЕНДАЦИИ -->
             <div id="recommend" class="tab-content">
-                <h2>⭐ Personalized Recommendations</h2>
+                <h2>Personalized Recommendations</h2>
                 <p style="color: var(--text-muted); margin-bottom: 15px;">Based on your preferences and other users' rating history.</p>
                 
                 <div class="instructions">
@@ -420,16 +429,22 @@
                     </ul>
                 </div>
                 
+                <div id="user-reviews-info"></div>
+                
                 {{recommendations}}
             </div>
             
             <!-- ДОБАВИТЬ ОТЗЫВ -->
             <div id="add_review" class="tab-content">
-                <h2>📝 Add Review</h2>
+                <h2>Add Review</h2>
                 <form method="POST" action="/add_review" class="review-form">
                     <div class="form-group">
                         <label>Wine name:</label>
-                        <input type="text" name="product" placeholder="e.g., Château Margaux" required>
+                        <div class="autocomplete-wrapper" style="position: relative;">
+                            <input type="text" name="product" id="wineProductInput" class="autocomplete-input" placeholder="e.g., Château Margaux" required autocomplete="off">
+                            <input type="hidden" name="user_id" id="wineUserId">
+                            <div class="autocomplete-list" id="wineProductList"></div>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label>Review text:</label>
@@ -451,7 +466,7 @@
         </div>
         
         <div class="privacy-note">
-            🔒 Personal data protected. Your User ID: {{user_id}}
+            Personal data protected. Your User ID: {{user_id}}
         </div>
     </div>
     
@@ -529,12 +544,93 @@
             autocompleteList.classList.add('show');
         }
         
+        // === AUTOCOMPLETE FOR WINE PRODUCT INPUT ===
+        const wineProductInput = document.getElementById('wineProductInput');
+        const wineProductList = document.getElementById('wineProductList');
+        let wineDebounceTimer;
+        
+        wineProductInput.addEventListener('input', function(e) {
+            const query = e.target.value.trim();
+            
+            clearTimeout(wineDebounceTimer);
+            
+            if (query.length < 2) {
+                wineProductList.classList.remove('show');
+                return;
+            }
+            
+            wineDebounceTimer = setTimeout(() => {
+                fetchWinesForProduct(query);
+            }, 300);
+        });
+        
+        async function fetchWinesForProduct(query) {
+            try {
+                const response = await fetch(`/api/search_wines?q=${encodeURIComponent(query)}`);
+                const data = await response.json();
+                
+                if (data.wines && data.wines.length > 0) {
+                    renderWineProductAutocomplete(data.wines);
+                } else {
+                    wineProductList.classList.remove('show');
+                }
+            } catch (error) {
+                console.error('Error fetching wines:', error);
+            }
+        }
+        
+        function renderWineProductAutocomplete(wines) {
+            wineProductList.innerHTML = '';
+            
+            wines.slice(0, 10).forEach(wine => {
+                const item = document.createElement('div');
+                item.className = 'autocomplete-item';
+                item.innerHTML = `
+                    <div>
+                        <div class="wine-name">${wine.name}</div>
+                        <div class="wine-country">${wine.product} | ${wine.country}</div>
+                    </div>
+                    <div class="wine-rating">${'★'.repeat(wine.rating)}${'☆'.repeat(5-wine.rating)}</div>
+                `;
+                
+                item.addEventListener('click', () => {
+                    wineProductInput.value = wine.product;
+                    wineProductList.classList.remove('show');
+                });
+                
+                wineProductList.appendChild(item);
+            });
+            
+            wineProductList.classList.add('show');
+        }
+        
+        // Load user reviews info on page load
+        async function loadUserReviewsInfo() {
+            try {
+                const response = await fetch('/api/recommendations');
+                const data = await response.json();
+                
+                const infoDiv = document.getElementById('user-reviews-info');
+                if (data.recommendations && data.recommendations.length > 0) {
+                    infoDiv.innerHTML = '<div class="sentiment-box sentiment-positive"><h3>✓ ' + data.recommendations.length + ' recommendation(s) based on your reviews</h3><p>Your User ID: ' + data.user_id + '</p></div>';
+                } else {
+                    infoDiv.innerHTML = '<div class="sentiment-box sentiment-negative"><h3>No recommendations yet</h3><p>Add some reviews to get personalized recommendations!</p></div>';
+                }
+            } catch (error) {
+                console.error('Error loading user info:', error);
+            }
+        }
+        
         // Close autocomplete on click outside
         document.addEventListener('click', function(e) {
             if (!e.target.closest('.autocomplete-wrapper')) {
                 autocompleteList.classList.remove('show');
+                wineProductList.classList.remove('show');
             }
         });
+        
+        // Load info when page loads
+        document.addEventListener('DOMContentLoaded', loadUserReviewsInfo);
     </script>
 </body>
 </html>

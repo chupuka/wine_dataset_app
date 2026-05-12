@@ -45,6 +45,7 @@ def get_current_user():
 def render_page(results_html='', sentiment_result='', stats_html='', 
                 top_positive_html='', forecast_html='', recommendations_html=''):
     """Render page with template replacement"""
+    user_id = get_current_user()
     try:
         with open('index.html', 'r', encoding='utf-8') as f:
             page = f.read()
@@ -57,6 +58,7 @@ def render_page(results_html='', sentiment_result='', stats_html='',
     page = page.replace('{{top_positive}}', top_positive_html)
     page = page.replace('{{forecast}}', forecast_html)
     page = page.replace('{{recommendations}}', recommendations_html)
+    page = page.replace('{{user_id}}', user_id)
     
     return page
 
@@ -147,10 +149,21 @@ def index():
     # Recommendations for current user
     user_id = get_current_user()
     recs = get_user_recommendations(user_id, 5)
-    recommendations_html = '<div class="recommendations"><h4>For you:</h4><ul>'
-    for r in recs:
-        recommendations_html += f'<li>{r}</li>'
-    recommendations_html += '</ul></div>'
+    recommendations_html = '<div class="recommendations-grid">'
+    for i, r in enumerate(recs, 1):
+        recommendations_html += f'''
+        <div class="wine-card">
+            <div class="wine-header">
+                <span class="wine-number">#{i}</span>
+                <span class="wine-rating">★★★★☆</span>
+            </div>
+            <div class="wine-icon">🍷</div>
+            <div class="wine-name">{r}</div>
+            <div class="wine-info">Personal pick for you</div>
+            <span class="match-score">Based on your preferences</span>
+        </div>
+        '''
+    recommendations_html += '</div>'
     
     return render_page(results_html, '', stats_html, top_positive_html, forecast_html, recommendations_html)
 
@@ -234,13 +247,37 @@ def recommendations():
     
     results = []
     for prod in recs:
-        results.append({'name': prod, 'product': prod, 'rating': 4, 'score': 90})
+        results.append({
+            'name': prod, 
+            'product': prod, 
+            'rating': 4, 
+            'score': 90,
+            'description': 'Recommended based on similar users',
+            'region': ''
+        })
     
     results_html = render_wine_results(results)
     stats_html = render_stats_html()
     top_positive_html = render_top_positive()
     
-    return render_page(results_html, '', stats_html, top_positive_html)
+    # Recommendations for current user
+    recommendations_html = '<div class="recommendations-grid">'
+    for i, r in enumerate(recs, 1):
+        recommendations_html += f'''
+        <div class="wine-card">
+            <div class="wine-header">
+                <span class="wine-number">#{i}</span>
+                <span class="wine-rating">★★★★☆</span>
+            </div>
+            <div class="wine-icon">🍷</div>
+            <div class="wine-name">{r}</div>
+            <div class="wine-info">Personal pick for you</div>
+            <span class="match-score">Based on your preferences</span>
+        </div>
+        '''
+    recommendations_html += '</div>'
+    
+    return render_page(results_html, '', stats_html, top_positive_html, '', recommendations_html)
 
 
 # ==================== API ENDPOINTS ====================
