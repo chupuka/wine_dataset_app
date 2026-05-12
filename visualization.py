@@ -228,33 +228,33 @@ plt.tight_layout(rect=[0, 0, 1, 0.96])
 plt.savefig('student_report.png', dpi=150, bbox_inches='tight', facecolor='white')
 plt.close()
 
-print("\n✅ Отчёт сохранён: student_report.png")
+print("\n[OK] Otchet sohranen: student_report.png")
 
 # ==================== КОНСОЛЬНЫЙ ВЫВОД ====================
 print("\n" + "="*60)
 print("ИТОГОВЫЙ ОТЧЁТ")
 print("="*60)
 
-print("\n📊 МЕТРИКИ МОДЕЛЕЙ КЛАССИФИКАЦИИ:")
+print("\nMETRIKI MODELEY KLASSIFIKATSII:")
 print(results_df.round(4).to_string())
 
-print("\n🏆 ЛУЧШАЯ МОДЕЛЬ:", results_df['F1-Score'].idxmax())
-print(f"   F1-Score: {results_df['F1-Score'].max():.4f}")
+print("\nLUCHSHAYA MODEL:", results_df['F1-Score'].idxmax())
+print("   F1-Score:", f"{results_df['F1-Score'].max():.4f}")
 
-print("\n📈 СТАТИСТИКА ДАННЫХ:")
-print(f"   Всего записей: {len(df)}")
-print(f"   Позитивных отзывов: {df['sentiment'].sum()} ({df['sentiment'].mean()*100:.1f}%)")
-print(f"   Уникальных вин: {df['product'].nunique()}")
-print(f"   Стран: {df['country'].nunique()}")
+print("\nSTATISTIKA DANNYH:")
+print("   Vsego zapisey:", len(df))
+print("   Pozitivnyh otzyvov:", df['sentiment'].sum(), f"({df['sentiment'].mean()*100:.1f}%)")
+print("   Unikalnyh vin:", df['product'].nunique())
+print("   Stran:", df['country'].nunique())
 
-print("\n🍷 ТОП-5 ВИН ПО ДОЛЕ ПОЗИТИВА:")
+print("\nTOP-5 VIN PO DOLE POZITIVA:")
 for i, (prod, row) in enumerate(top_products.head(5).iterrows(), 1):
-    print(f"   {i}. {prod}: {row['positive_ratio']*100:.1f}% ({int(row['reviews_count'])} отзывов)")
+    print("   ", i, ".", prod, ":", f"{row['positive_ratio']*100:.1f}%", f"({int(row['reviews_count'])} otzyvov)")
 
-print("\n📝 ТОП-5 СЛОВ В НЕГАТИВНЫХ ОТЗЫВАХ:")
+print("\nTOP-5 SLOV V NEGATIVNYH OTZYVAH:")
 for word, count in top_neg_words[:5]:
-    print(f"   • {word}: {count}")
+    print("   -", word, ":", count)
 
 print("\n" + "="*60)
-print("Готово! Файл: student_report.png")
+print("Gotovo! Fayl: student_report.png")
 print("="*60)

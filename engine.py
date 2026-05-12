@@ -454,7 +454,7 @@ def recommend_wines(query, top_k=5):
                 if any(kw in text_lower for kw in keywords):
                     score += 30
         
-        # Рейтинг
+        # Рейтинг (0-40 баллов, нормализуем)
         score += row.get('rating', 3) * 8
         
         # Цена (бюджет)
@@ -470,12 +470,17 @@ def recommend_wines(query, top_k=5):
             if country in query_lower and country in str(row.get('country', '')).lower():
                 score += 15
         
-        # Случайный фактор
-        score += random.uniform(0, 10)
+        # Случайный фактор (уменьшаем влияние)
+        score += random.uniform(0, 5)
         
         scores.append((row, score))
     
     scores.sort(key=lambda x: x[1], reverse=True)
+    
+    # Нормализация score в диапазоне 0-100%
+    max_score = scores[0][1] if scores else 1
+    min_score = scores[-1][1] if scores else 0
+    
     return [
         {
             'name': row['winery'] if pd.notna(row.get('winery')) else row['product'],
@@ -483,7 +488,7 @@ def recommend_wines(query, top_k=5):
             'country': row.get('country', 'Unknown'),
             'price': row.get('price', 0) if pd.notna(row.get('price')) else 0,
             'rating': row['rating'],
-            'score': score,
+            'score': int(50 + (score / max_score) * 50) if max_score > 0 else 50,
             'description': row.get('text', '')[:100],
             'region': row.get('region', '')
         }
